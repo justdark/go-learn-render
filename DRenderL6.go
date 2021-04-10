@@ -43,10 +43,10 @@ func genViewPoint(x, y, w, h, depth int) dr.Matrix44f {
 func main() {
 	width := 1000.0
 	height := 1000.0
-	depth := 256
-	eye := dr.Vec3f{1, 1, 5}
+	depth := 255
+	eye := dr.Vec3f{1, 1, 4}
 	center := dr.Vec3f{0, 0, 0}
-	lightDirect := dr.Vec3f{1, -1, 1.0}.P().Normalize()
+	lightDirect := dr.Vec3f{1, 1, 1}.P().Normalize()
 	viewPoint := genViewPoint(int(width)/8, int(height)/8, int(width)*3/4, int(height)*3/4, depth)
 	modelView := lookAt(eye, center, dr.Vec3f{0, 1, 0})
 	dRender := dr.NewDRender(int(width), int(height))
@@ -55,7 +55,7 @@ func main() {
 
 	finalTransMatrix := viewPoint.PMatrix(projectMatrix).P().PMatrix(modelView)
 
-	model := utils.LoadModelFromFileWithDiffuse("./obj/african_head.obj", "./obj/african_head_diffuse.tga")
+	model := utils.LoadModelFromFileWithAll("./obj/african_head.obj", "./obj/african_head_diffuse.tga", "./obj/african_head_nm.tga", "./obj/african_head_spec.tga")
 	// fmt.Println(len(model.Faces))
 	// add sort by Z to better performance
 	zBuffer := make([]float64, int(width*height))
@@ -89,31 +89,16 @@ func main() {
 			i++
 		}
 
-		// intensity
-		v1 := vertexs_for_intentsity[1].Minus(vertexs_for_intentsity[0])
-		v2 := vertexs_for_intentsity[2].Minus(vertexs_for_intentsity[0])
-		intensity := dr.Cross(v1.ToVec3f(), v2.ToVec3f())
-		intensity = intensity.Normalize()
-
-		lightStrength := intensity.DotProduct(lightDirect)
-		// fmt.Println(lightStrength)
-		lightStrength = math.Min(lightStrength, 1.0)
-		lightStrength = math.Max(lightStrength, 0.0)
-
-		intensities := [3]float64{0, 0, 0}
-		for i := 0; i < 3; i++ {
-			intensities[i] = dr.VertexTrans(model.VNormal[face.VNormal[i]]).P().ToVec3f().P().DotProduct(lightDirect)
-		}
 		// fmt.Println(intensities)
 
-		//5.0 paint without norm intensity
-		// dRender.FillTriangleWithTexture(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, model.Texture, lightStrength)
+		//6.0 paint without norm mapping src
+		// dRender.FillTriangleWithTextureAndNormMapping(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, model.Texture, model.NormalMapping, lightDirect)
 
-		//5.1 paint with  Gouraud shading
-		dRender.FillTriangleWithTextureAndGouraudshading(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, intensities, model.Texture)
+		//6.1 paint with spec
+		dRender.FillTriangleWithTextureAndNormMappingAndSpecMapping(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, model, lightDirect)
 	}
 
-	// dRender.SavePNG("./lecture5.0.png")
-	dRender.SavePNG("./lecture5.1.png")
+	// dRender.SavePNG("./lecture6.0.png")
+	dRender.SavePNG("./lecture6.2.png")
 
 }

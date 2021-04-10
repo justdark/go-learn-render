@@ -23,14 +23,17 @@ type Face struct {
 	Vertexs  list.List
 	Z        float64
 	VTexture [3]int
+	VNormal  [3]int
 }
 
 type DModel struct {
-	Vertexs  []Vertex
-	Faces    []Face
-	VTexture []Vertex
-	VNormal  []Vertex
-	Texture  image.Image
+	Vertexs         []Vertex
+	Faces           []Face
+	VTexture        []Vertex
+	VNormal         []Vertex
+	Texture         image.Image
+	NormalMapping   image.Image
+	SpecularMapping image.Image
 }
 
 func (dModel *DModel) SortFacesByZ() {
@@ -69,16 +72,18 @@ func LoadModelFromFile(path string) DModel {
 			sp := strings.Split(s.Text(), " ")
 			fvs := list.New()
 			fvts := [3]int{}
+			fvns := [3]int{}
 			fz := 0.0
 			if len(sp) == 4 {
 				for i := 1; i <= 3; i++ {
 					index := extractVertexId(sp[i], 0) - 1
 					fvs.PushBack(index)
 					fvts[i-1] = extractVertexId(sp[i], 1) - 1
+					fvns[i-1] = extractVertexId(sp[i], 2) - 1
 					fz += vlist[index].Z
 				}
 			}
-			f := Face{*fvs, fz, fvts}
+			f := Face{*fvs, fz, fvts, fvns}
 			flist = append(flist, f)
 		} else if strings.Index(s.Text(), "vt ") == 0 {
 			sp := strings.Split(s.Text(), " ")
@@ -90,12 +95,32 @@ func LoadModelFromFile(path string) DModel {
 			vnlist = append(vnlist, newV)
 		}
 	}
-	return DModel{vlist, flist, vtlist, vnlist, nil}
+	return DModel{vlist, flist, vtlist, vnlist, nil, nil, nil}
 }
 
 func LoadModelFromFileWithDiffuse(path string, diffusePath string) DModel {
 	model := LoadModelFromFile(path)
 	file, _ := os.Open(diffusePath)
 	model.Texture, _ = tga.Decode(file)
+	return model
+}
+
+func LoadModelFromFileWithDiffuseAndNorm(path string, diffusePath string, normPath string) DModel {
+	model := LoadModelFromFile(path)
+	file, _ := os.Open(diffusePath)
+	model.Texture, _ = tga.Decode(file)
+	file2, _ := os.Open(normPath)
+	model.NormalMapping, _ = tga.Decode(file2)
+	return model
+}
+
+func LoadModelFromFileWithAll(path string, diffusePath string, normPath string, specPath string) DModel {
+	model := LoadModelFromFile(path)
+	file, _ := os.Open(diffusePath)
+	model.Texture, _ = tga.Decode(file)
+	file2, _ := os.Open(normPath)
+	model.NormalMapping, _ = tga.Decode(file2)
+	file3, _ := os.Open(specPath)
+	model.SpecularMapping, _ = tga.Decode(file3)
 	return model
 }

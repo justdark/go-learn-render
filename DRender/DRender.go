@@ -20,6 +20,15 @@ type Vertex struct {
 	Z float64
 }
 
+func (v *Vertex) IntegerLize() {
+	v.X = math.Round(v.X)
+	v.Y = math.Round(v.Y)
+}
+
+func (v Vertex) P() *Vertex {
+	return &v
+}
+
 func (v *Vertex) Minus(v2 Vertex) Vertex {
 	return Vertex{v.X - v2.X, v.Y - v2.Y, v.Z - v2.Z}
 }
@@ -159,15 +168,15 @@ func (dRender *DRender) FillTriangleWithZBuffer(v1 Vertex, v2 Vertex, v3 Vertex,
 	bbmin, bbmax := BoundingBoxWithLimit(vertexs, Vec3f{0, 0, 0}, Vec3f{float64(dRender.context.Width()), float64(dRender.context.Height()), math.MaxFloat64})
 	// dRender.DrawTriangle(v1, v2, v3, color)
 
-	for x := bbmin.X; x < bbmax.X; x++ {
-		for y := bbmin.Y; y < bbmax.Y; y++ {
-			u := Barycentric2D(vertexs, Vertex{x, y, 0})
+	for x := int(bbmin.X); x < int(bbmax.X); x++ {
+		for y := int(bbmin.Y); y < int(bbmax.Y); y++ {
+			u := Barycentric2D(vertexs, Vertex{float64(x), float64(y), 0})
 			if u.X < triangleThresh || u.Y < triangleThresh || u.Z < triangleThresh {
 				continue
 			}
 			z := v1.Z*u.X + v2.Z*u.Y + v3.Z*u.Z
-			if (*zBuffer)[int(x+float64(dRender.context.Width())*y)] < z {
-				(*zBuffer)[int(x+float64(dRender.context.Width())*y)] = z
+			if (*zBuffer)[int(x+dRender.context.Width()*y)] < z {
+				(*zBuffer)[int(x+dRender.context.Width()*y)] = z
 				dRender.DrawOnPixelInvertedY(int(x), int(y), color)
 			}
 		}
@@ -178,9 +187,9 @@ func (dRender *DRender) FillTriangleWithTexture(v1 Vertex, v2 Vertex, v3 Vertex,
 	vertexs := []Vertex{v1, v2, v3}
 	bbmin, bbmax := BoundingBoxWithLimit(vertexs, Vec3f{0, 0, 0}, Vec3f{float64(dRender.context.Width()), float64(dRender.context.Height()), math.MaxFloat64})
 	// dRender.DrawTriangle(v1, v2, v3, color)
-	for x := bbmin.X; x < bbmax.X; x++ {
-		for y := bbmin.Y; y < bbmax.Y; y++ {
-			u := Barycentric2D(vertexs, Vertex{x, y, 0})
+	for x := int(bbmin.X); x < int(bbmax.X); x++ {
+		for y := int(bbmin.Y); y < int(bbmax.Y); y++ {
+			u := Barycentric2D(vertexs, Vertex{float64(x), float64(y), 0})
 			if u.X < triangleThresh || u.Y < triangleThresh || u.Z < triangleThresh {
 				continue
 			}
@@ -193,13 +202,160 @@ func (dRender *DRender) FillTriangleWithTexture(v1 Vertex, v2 Vertex, v3 Vertex,
 			// newColor := color.RGBA{uint8(r), uint8(g), uint8(b), 255}
 			newColor := color.RGBA{uint8(float64(r>>8) * lightStrength), uint8(float64(g>>8) * lightStrength), uint8(float64(b>>8) * lightStrength), 255}
 			// fmt.Println(colorRaw, newColor, r, g, b, uint8(float64(r)*lightStrength), uint8(float64(g)*lightStrength), uint8(float64(b)*lightStrength))
-			if (*zBuffer)[int(x+float64(dRender.context.Width())*y)] < z {
-				(*zBuffer)[int(x+float64(dRender.context.Width())*y)] = z
+			// fmt.Println(x, y, int(x)+dRender.context.Width()*int(y))
+			if (*zBuffer)[int(x)+dRender.context.Width()*int(y)] < z {
+				(*zBuffer)[int(x)+dRender.context.Width()*int(y)] = z
 				dRender.DrawOnPixelInvertedY(int(x), int(y), newColor)
 			}
 		}
 	}
 }
+
+func (dRender *DRender) FillTriangleWithTextureAndGouraudshading(v1 Vertex, v2 Vertex, v3 Vertex, zBuffer *[]float64, vts [3]Vertex, intensities [3]float64, texture image.Image) {
+	vertexs := []Vertex{v1, v2, v3}
+	bbmin, bbmax := BoundingBoxWithLimit(vertexs, Vec3f{0, 0, 0}, Vec3f{float64(dRender.context.Width()), float64(dRender.context.Height()), math.MaxFloat64})
+	// dRender.DrawTriangle(v1, v2, v3, color)
+	for x := int(bbmin.X); x < int(bbmax.X); x++ {
+		for y := int(bbmin.Y); y < int(bbmax.Y); y++ {
+			u := Barycentric2D(vertexs, Vertex{float64(x), float64(y), 0})
+			if u.X < triangleThresh || u.Y < triangleThresh || u.Z < triangleThresh {
+				continue
+			}
+			z := v1.Z*u.X + v2.Z*u.Y + v3.Z*u.Z
+			vx := vts[0].X*u.X + vts[1].X*u.Y + vts[2].X*u.Z
+			vy := vts[0].Y*u.X + vts[1].Y*u.Y + vts[2].Y*u.Z
+			colorRaw := texture.At(int(vx), int(vy))
+			r, g, b, _ := colorRaw.RGBA()
+
+			// newColor := color.RGBA{uint8(r), uint8(g), uint8(b), 255}
+			lightStrength := intensities[0]*u.X + intensities[1]*u.Y + intensities[2]*u.Z
+			lightStrength = math.Max(lightStrength, 0.0)
+			lightStrength = math.Min(lightStrength, 1.0)
+			newColor := color.RGBA{uint8(float64(r>>8) * lightStrength), uint8(float64(g>>8) * lightStrength), uint8(float64(b>>8) * lightStrength), 255}
+			// fmt.Println(colorRaw, newColor, r, g, b, uint8(float64(r)*lightStrength), uint8(float64(g)*lightStrength), uint8(float64(b)*lightStrength))
+			// fmt.Println(x, y, int(x)+dRender.context.Width()*int(y))
+			if (*zBuffer)[int(x)+dRender.context.Width()*int(y)] < z {
+				(*zBuffer)[int(x)+dRender.context.Width()*int(y)] = z
+				dRender.DrawOnPixelInvertedY(int(x), int(y), newColor)
+			}
+		}
+	}
+}
+
+func (dRender *DRender) FillTriangleWithTextureAndNormMapping(v1 Vertex, v2 Vertex, v3 Vertex, zBuffer *[]float64, vts [3]Vertex, texture image.Image, normMapping image.Image, lightDirect Vec3f) {
+	vertexs := []Vertex{v1, v2, v3}
+	bbmin, bbmax := BoundingBoxWithLimit(vertexs, Vec3f{0, 0, 0}, Vec3f{float64(dRender.context.Width()), float64(dRender.context.Height()), math.MaxFloat64})
+	// dRender.DrawTriangle(v1, v2, v3, color)
+	for x := int(bbmin.X); x < int(bbmax.X); x++ {
+		for y := int(bbmin.Y); y < int(bbmax.Y); y++ {
+			u := Barycentric2D(vertexs, Vertex{float64(x), float64(y), 0})
+			if u.X < triangleThresh || u.Y < triangleThresh || u.Z < triangleThresh {
+				continue
+			}
+			z := v1.Z*u.X + v2.Z*u.Y + v3.Z*u.Z
+			vx := vts[0].X*u.X + vts[1].X*u.Y + vts[2].X*u.Z
+			vy := vts[0].Y*u.X + vts[1].Y*u.Y + vts[2].Y*u.Z
+
+			colorRaw := texture.At(int(vx), int(vy))
+			r, g, b, _ := colorRaw.RGBA()
+
+			nx, ny, nz, _ := normMapping.At(int(vx), int(vy)).RGBA()
+			norm := Vec3f{float64(nz>>8)/255.0*2.0 - 1.0, float64(ny>>8)/255.0*2.0 - 1.0, float64(nx>>8)/255*2.0 - 1.0}.P().Normalize()
+
+			// newColor := color.RGBA{uint8(r), uint8(g), uint8(b), 255}
+			lightStrength := norm.DotProduct(lightDirect.Normalize())
+			lightStrength = math.Max(lightStrength, 0.0)
+			newColor := color.RGBA{uint8(float64(r>>8) * lightStrength), uint8(float64(g>>8) * lightStrength), uint8(float64(b>>8) * lightStrength), 255}
+			// fmt.Println(colorRaw, newColor, r, g, b, uint8(float64(r)*lightStrength), uint8(float64(g)*lightStrength), uint8(float64(b)*lightStrength))
+			// fmt.Println(x, y, int(x)+dRender.context.Width()*int(y))
+			if (*zBuffer)[int(x)+dRender.context.Width()*int(y)] < z {
+				(*zBuffer)[int(x)+dRender.context.Width()*int(y)] = z
+				dRender.DrawOnPixelInvertedY(int(x), int(y), newColor)
+			}
+		}
+	}
+}
+
+func (dRender *DRender) FillTriangleWithTextureAndNormMappingAndSpecMapping(v1 Vertex, v2 Vertex, v3 Vertex, zBuffer *[]float64, vts [3]Vertex, vns [3]Vertex, model utils.DModel, lightDirect Vec3f, m Matrix44f, mit Matrix44f) {
+	vertexs := []Vertex{v1, v2, v3}
+	bbmin, bbmax := BoundingBoxWithLimit(vertexs, Vec3f{0, 0, 0}, Vec3f{float64(dRender.context.Width()), float64(dRender.context.Height()), math.MaxFloat64})
+	// dRender.DrawTriangle(v1, v2, v3, color)
+	for x := int(bbmin.X); x < int(bbmax.X); x++ {
+		for y := int(bbmin.Y); y < int(bbmax.Y); y++ {
+			u := Barycentric2D(vertexs, Vertex{float64(int(x)), float64(int(y)), 0})
+			if u.X < triangleThresh || u.Y < triangleThresh || u.Z < triangleThresh {
+				continue
+			}
+			z := v1.Z*u.X + v2.Z*u.Y + v3.Z*u.Z
+			vx := vts[0].X*u.X + vts[1].X*u.Y + vts[2].X*u.Z
+			vy := vts[0].Y*u.X + vts[1].Y*u.Y + vts[2].Y*u.Z
+			vx = float64(int(vx * 1024))
+			vy = float64(int(vy * 1024))
+
+			colorRaw := model.Texture.At(int(vx), int(vy))
+			r, g, b, _ := colorRaw.RGBA()
+
+			nx, ny, nz, _ := model.NormalMapping.At(int(vx), int(vy)).RGBA()
+			norm := Vec3f{float64(nz)/65536.0*2.0 - 1.0, float64(ny)/65536.0*2.0 - 1.0, float64(nx)/65536*2.0 - 1.0}.P().Normalize()
+			lightDirect = lightDirect.Normalize()
+			// norm = mit.PVector(norm.ToVector4fArray()).P().ToVector3f().P().ToVec3f().P().Normalize()
+			// lightDirect = m.PVector(lightDirect.ToVector4fArray()).P().ToVector3f().P().ToVec3f().P().Normalize()
+
+			specR, specG, specB, specA := model.SpecularMapping.At(int(vx), int(vy)).RGBA()
+			// newColor := color.RGBA{uint8(r), uint8(g), uint8(b), 255}
+
+			lightStrength := norm.DotProduct(lightDirect)
+			rv := norm.ProductFloat(lightStrength * 2.0).P().Minus(lightDirect).P().Normalize() // reflected light
+			lightStrength = math.Max(lightStrength, 0.0)
+			specValue := math.Pow(math.Max(rv.Z, 0.0), 12*(1.0-math.Min(1.0, float64(specR)/65536)))
+			// if spec <= 257 {
+			// 	specValue = 0.0
+			// }
+			// fmt.Println(spec / 256)
+
+			// fmt.Println(specValue)
+			// specValue = 0.0
+			// r8 := uint8(math.Min(255, 5+float64(r>>8)*(lightStrength+0.6*specValue)))
+			// g8 := uint8(math.Min(255, 5+float64(g>>8)*(lightStrength+0.6*specValue)))
+			// b8 := uint8(math.Min(255, 5+float64(b>>8)*(lightStrength+0.6*specValue)))
+
+			r8 := uint8(math.Min(255, float64(r>>8)*(1.2*lightStrength+2.6*specValue)))
+			g8 := uint8(math.Min(255, float64(g>>8)*(1.2*lightStrength+2.6*specValue)))
+			b8 := uint8(math.Min(255, float64(b>>8)*(1.2*lightStrength+2.6*specValue)))
+
+			// r8 = uint8(math.Min(255, float64(specB>>8)))
+			// g8 = uint8(math.Min(255, float64(specB>>8)))
+			// b8 = uint8(math.Min(255, float64(specB>>8)))
+
+			// r8 = uint8(math.Min(255, specValue*255))
+			// g8 = uint8(math.Min(255, specValue*255))
+			// b8 = uint8(math.Min(255, specValue*255))
+
+			// r8 = uint8(math.Min(255, lightStrength*255))
+			// g8 = uint8(math.Min(255, lightStrength*255))
+			// b8 = uint8(math.Min(255, lightStrength*255))
+			// r8 = uint8(math.Min(255, math.Max(rv.Z, 0.0)*255))
+			// g8 = uint8(math.Min(255, math.Max(rv.Z, 0.0)*255))
+			// b8 = uint8(math.Min(255, math.Max(rv.Z, 0.0)*255))
+			specB = specB + specG + specR + specA
+			newColor := color.RGBA{r8, g8, b8, 255}
+			// if float64(spec>>8)/255.0 > 0.5 {
+			// 	fmt.Println(model.SpecularMapping.At(int(vx), int(vy)).RGBA())
+			// 	fmt.Println(lightStrength, specValue)
+			// 	fmt.Println(rv)
+			// 	fmt.Println(norm)
+			// 	fmt.Println("==============")
+			// }
+			// fmt.Println(colorRaw, newColor, r, g, b, uint8(float64(r)*lightStrength), uint8(float64(g)*lightStrength), uint8(float64(b)*lightStrength))
+			// fmt.Println(x, y, int(x)+dRender.context.Width()*int(y))
+			if (*zBuffer)[int(x)+dRender.context.Width()*int(y)] < z {
+				(*zBuffer)[int(x)+dRender.context.Width()*int(y)] = z
+				dRender.DrawOnPixelInvertedY(int(x), int(y), newColor)
+			}
+		}
+	}
+}
+
 func VertexTrans(v utils.Vertex) Vertex {
 	return Vertex{v.X, v.Y, v.Z}
 }
@@ -286,7 +442,7 @@ func (dRender *DRender) LoadModelForRenderWithTexture(modelPath string, textureP
 	}
 }
 
-func (dRender *DRender) LoadModelForRenderWithTextureAndCamera(modelPath string, texturePath string, width float64, height float64, lightDirect Vec3f) {
+func (dRender *DRender) LoadModelForRenderWithTextureAndCamera(modelPath string, texturePath string, width float64, height float64, lightDirect Vec3f, camera Vec3f) {
 	model := utils.LoadModelFromFileWithDiffuse(modelPath, texturePath)
 
 	zBuffer := make([]float64, int(width*height))
@@ -311,7 +467,7 @@ func (dRender *DRender) LoadModelForRenderWithTextureAndCamera(modelPath string,
 		for v := face.Vertexs.Front(); v != nil && i < 3; v = v.Next() {
 			vIndex := v.Value
 			vertexs[i] = VertexTrans(model.Vertexs[vIndex.(int)])
-			vertexs_for_intentsity[i] = VertexTrans(model.Vertexs[vIndex.(int)])
+			vertexs_for_intentsity[i] = vertexs[i]
 			vertexs[i].X = math.Round((vertexs[i].X + 1.0) * width / 2.0)
 			vertexs[i].Y = math.Round((vertexs[i].Y + 1.0) * height / 2.0)
 			i++

@@ -47,7 +47,7 @@ func main() {
 		for v := face.Vertexs.Front(); v != nil && i < 3; v = v.Next() {
 			vIndex := v.Value
 			vertexs[i] = dr.VertexTrans(model.Vertexs[vIndex.(int)])
-			vertexs[i] = trans(vertexs[i])
+			vertexs[i] = trans(vertexs[i]) // trans at here
 			vertexs_for_intentsity[i] = vertexs[i]
 			vertexs[i].X = math.Round((vertexs[i].X + 1.0) * width / 2.0)
 			vertexs[i].Y = math.Round((vertexs[i].Y + 1.0) * height / 2.0)

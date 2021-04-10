@@ -41,12 +41,12 @@ func genViewPoint(x, y, w, h, depth int) dr.Matrix44f {
 }
 
 func main() {
-	width := 1000.0
-	height := 1000.0
-	depth := 256
-	eye := dr.Vec3f{1, 1, 5}
+	width := 800
+	height := 800
+	depth := 2000
+	eye := dr.Vec3f{1, 1, 4}
 	center := dr.Vec3f{0, 0, 0}
-	lightDirect := dr.Vec3f{1, -1, 1.0}.P().Normalize()
+	lightDirect := dr.Vec3f{1, 1, 1}.P().Normalize()
 	viewPoint := genViewPoint(int(width)/8, int(height)/8, int(width)*3/4, int(height)*3/4, depth)
 	modelView := lookAt(eye, center, dr.Vec3f{0, 1, 0})
 	dRender := dr.NewDRender(int(width), int(height))
@@ -54,8 +54,10 @@ func main() {
 	projectMatrix[3][2] = -1.0 / eye.Minus(center).P().Norm()
 
 	finalTransMatrix := viewPoint.PMatrix(projectMatrix).P().PMatrix(modelView)
+	mit := projectMatrix.PMatrix(modelView).Invert().P().Transpose()
 
-	model := utils.LoadModelFromFileWithDiffuse("./obj/african_head.obj", "./obj/african_head_diffuse.tga")
+	// model := utils.LoadModelFromFileWithAll("./obj/african_head.obj", "./obj/african_head_diffuse.tga", "./obj/african_head_nm.tga", "./obj/african_head_spec.tga")
+	model := utils.LoadModelFromFileWithAll("./obj/diablo3_pose.obj", "./obj/diablo3_pose_diffuse.tga", "./obj/diablo3_pose_nm.tga", "./obj/diablo3_pose_spec.tga")
 	// fmt.Println(len(model.Faces))
 	// add sort by Z to better performance
 	zBuffer := make([]float64, int(width*height))
@@ -66,13 +68,15 @@ func main() {
 	for i := 0; i < len(model.Faces); i++ {
 		face := model.Faces[i]
 		vertexs := [3]dr.Vertex{}
-		vertexs_for_intentsity := [3]dr.Vertex{}
 		vertexs_for_texture := [3]dr.Vertex{}
+		vertexs_for_normal := [3]dr.Vertex{}
 		textureVertex := face.VTexture
 		for i := 0; i < 3; i++ {
 			vertexs_for_texture[i] = dr.VertexTrans(model.VTexture[textureVertex[i]])
-			vertexs_for_texture[i].X *= float64(model.Texture.Bounds().Max.X)
-			vertexs_for_texture[i].Y = float64(model.Texture.Bounds().Max.Y) - vertexs_for_texture[i].Y*float64(model.Texture.Bounds().Max.Y)
+			// vertexs_for_texture[i].X *= float64(model.Texture.Bounds().Max.X)
+			vertexs_for_texture[i].Y = 1 - vertexs_for_texture[i].Y
+			vertexs_for_normal[i] = dr.VertexTrans(model.VNormal[face.VNormal[i]])
+			vertexs_for_normal[i].Y = 1 - vertexs_for_normal[i].Y
 		}
 		// fmt.Println(vertexs_for_texture)
 
@@ -85,35 +89,19 @@ func main() {
 			v := dr.VertexTrans(model.Vertexs[vIndex.(int)])
 			vertexs[i] = finalTransMatrix.PVector(v.ToVec3f().P().ToVector4fArray()).P().ToVector3f().P().ToVertex() // trans at here
 			vertexs[i].IntegerLize()
-			vertexs_for_intentsity[i] = finalTransMatrix.PVector(v.ToVec3f().P().ToVector4fArray()).P().ToVector3f().P().ToVertex()
 			i++
 		}
 
-		// intensity
-		v1 := vertexs_for_intentsity[1].Minus(vertexs_for_intentsity[0])
-		v2 := vertexs_for_intentsity[2].Minus(vertexs_for_intentsity[0])
-		intensity := dr.Cross(v1.ToVec3f(), v2.ToVec3f())
-		intensity = intensity.Normalize()
-
-		lightStrength := intensity.DotProduct(lightDirect)
-		// fmt.Println(lightStrength)
-		lightStrength = math.Min(lightStrength, 1.0)
-		lightStrength = math.Max(lightStrength, 0.0)
-
-		intensities := [3]float64{0, 0, 0}
-		for i := 0; i < 3; i++ {
-			intensities[i] = dr.VertexTrans(model.VNormal[face.VNormal[i]]).P().ToVec3f().P().DotProduct(lightDirect)
-		}
 		// fmt.Println(intensities)
 
-		//5.0 paint without norm intensity
-		// dRender.FillTriangleWithTexture(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, model.Texture, lightStrength)
+		//6.0 paint without norm mapping src
+		// dRender.FillTriangleWithTextureAndNormMapping(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, model.Texture, model.NormalMapping, lightDirect)
 
-		//5.1 paint with  Gouraud shading
-		dRender.FillTriangleWithTextureAndGouraudshading(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, intensities, model.Texture)
+		//6.1 paint with spec
+
+		dRender.FillTriangleWithTextureAndNormMappingAndSpecMapping(vertexs[0], vertexs[1], vertexs[2], &zBuffer, vertexs_for_texture, vertexs_for_normal, model, lightDirect, modelView, mit)
 	}
 
-	// dRender.SavePNG("./lecture5.0.png")
-	dRender.SavePNG("./lecture5.1.png")
+	dRender.SavePNG("./out2.png")
 
 }

@@ -17,4 +17,6 @@ func main() {
 	fmt.Println(math.Round(0.51))
 	fmt.Println(math.Round(0.5))
 	fmt.Println(math.Round(0.49))
+	fmt.Println(math.Pow(0.99, 128))
+	fmt.Println(math.Pow(0, -1))
 }
